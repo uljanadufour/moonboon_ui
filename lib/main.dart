@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -14,6 +17,12 @@ import 'setup_flow/bloc/setup_error_type.dart';
 import 'setup_flow/monitor_provisioning_page.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_colors.dart';
+import 'variants/home_devices/shared.dart';
+import 'variants/home_devices/v1_frosted_pair_page.dart';
+import 'variants/home_devices/v2_window_display_page.dart';
+import 'variants/home_devices/v3_lead_follow_page.dart';
+import 'variants/home_devices/v4_deck_page.dart';
+import 'variants/home_devices/v5_nursery_shelf_page.dart';
 import 'variants/settings/v1_stacked_list_page.dart';
 import 'variants/settings/v2_hero_actions_page.dart';
 import 'variants/settings/v3_tile_dashboard_page.dart';
@@ -54,13 +63,61 @@ class MoonboonUIApp extends StatefulWidget {
 const String _shot = String.fromEnvironment('SHOT');
 const bool _shotDark = bool.fromEnvironment('SHOT_DARK');
 
+/// Home devices variants by id, for the launcher and the screenshot remote.
+Widget homeDevicesVariant(String id, Ownership initial) => switch (id) {
+  'v1' => V1FrostedPairPage(key: UniqueKey(), initial: initial),
+  'v2' => V2WindowDisplayPage(key: UniqueKey(), initial: initial),
+  'v3' => V3LeadFollowPage(key: UniqueKey(), initial: initial),
+  'v4' => V4DeckPage(key: UniqueKey(), initial: initial),
+  _ => V5NurseryShelfPage(key: UniqueKey(), initial: initial),
+};
+
 class _MoonboonUIAppState extends State<MoonboonUIApp> {
   bool _isDark = _shotDark;
+  final _navigatorKey = GlobalKey<NavigatorState>();
+  Timer? _remote;
+  String? _lastCommand;
+
+  // Screenshot remote (debug only): write "hd <v1..v5> <none|monitor|bouncer|both>
+  // <light|dark>" to the app's tmp/remote.txt and the app jumps there.
+  @override
+  void initState() {
+    super.initState();
+    assert(() {
+      _remote = Timer.periodic(const Duration(milliseconds: 400), (_) => _poll());
+      return true;
+    }());
+  }
+
+  void _poll() {
+    final file = File('${Directory.systemTemp.path}/remote.txt');
+    if (!file.existsSync()) return;
+    final command = file.readAsStringSync().trim();
+    if (command == _lastCommand) return;
+    _lastCommand = command;
+    final parts = command.split(' ');
+    if (parts.length < 4 || parts[0] != 'hd') return;
+    setState(() => _isDark = parts[3] == 'dark');
+    final ownership = Ownership.values.byName(parts[2]);
+    _navigatorKey.currentState?.pushAndRemoveUntil(
+      PageRouteBuilder(
+        pageBuilder: (_, _, _) => homeDevicesVariant(parts[1], ownership),
+      ),
+      (_) => false,
+    );
+  }
+
+  @override
+  void dispose() {
+    _remote?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = _isDark ? ThemeColors.darkVariantC : ThemeColors.light;
     return MaterialApp(
+      navigatorKey: _navigatorKey,
       title: 'Moonboon Monitor Setup',
       debugShowCheckedModeBanner: false,
       theme: buildThemeWithColors(colors, _isDark ? Brightness.dark : Brightness.light),
@@ -180,6 +237,38 @@ class _LauncherPage extends StatelessWidget {
               ),
 
               const SizedBox(height: 40),
+
+              // ══════════════════════════════════════════════════════════════
+              // PROTOTYPE — New home: always both device cards
+              // ══════════════════════════════════════════════════════════════
+              _SectionLabel(label: 'Prototype · New home device cards', accent: true),
+              const SizedBox(height: 4),
+              Text(
+                'Both devices always shown; unowned ones frosted, tap to set up. Switch states at the top.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: context.color.textTertiary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              for (final (id, label, subtitle) in const [
+                ('v1', 'V1 · The Frosted Pair', 'Card grid — production 2-up cards, unowned frosted'),
+                ('v2', 'V2 · The Window Display', 'Stacked — unowned as a tall blurred photo with a promise'),
+                ('v3', 'V3 · Lead & Follow', 'Hero + companion — owned leads, unowned a narrow sliver'),
+                ('v4', 'V4 · The Deck', 'Carousel — tall photo cards, unowned peeking off the edge'),
+                ('v5', 'V5 · The Nursery Shelf', 'Spatial — both products in one scene, unowned out of focus'),
+              ]) ...[
+                _FlowTile(
+                  label: label,
+                  subtitle: subtitle,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => homeDevicesVariant(id, Ownership.none),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              const SizedBox(height: 36),
 
               // ══════════════════════════════════════════════════════════════
               // PROTOTYPE — Revised Settings (CU-86cavd37q)
