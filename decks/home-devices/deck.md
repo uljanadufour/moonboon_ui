@@ -26,6 +26,17 @@
 - Removing the "Add" CTA also removes the way to add a **second** monitor or a **third** bouncer from home. They'd need another entry point (Settings → Devices, or the add-device sheet from the profile). See open questions.
 - With 3+ devices, production's scrolling row stays. Unowned cards only appear for a device *type* you don't own.
 
+**Try it yourself (simulator).**
+
+```bash
+git clone -b prototype/new-home-device-cards https://github.com/uljanadufour/moonboon_ui.git
+cd moonboon_ui
+flutter pub get        # Flutter 3.44.x
+open -a Simulator && flutter run
+```
+
+Or open `ios/Runner.xcworkspace` in Xcode after `flutter pub get` and press Run. In the app, tap **V1–V5** under "Prototype · New home device cards" at the top of the launcher.
+
 **How to feel it.** Every variant has a state switcher at the top (No devices / Monitor / Bouncer / Both). Tapping a blurred card opens the real setup sheet from moonboon_ui; closing it marks the device as added, so you can watch the card come into focus.
 
 ---
