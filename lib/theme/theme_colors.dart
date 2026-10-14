@@ -10,6 +10,8 @@ class ThemeColors {
   final Color textQuaternary;
   final Color textInverse;
   final Color textInactive;
+  /// Label on the apricot CTA surface (surfaceTertiary): black in both themes.
+  final Color textOnCta;
   final Color surfacePrimary;
   final Color surfaceSecondary;
   final Color surfaceTertiary;
@@ -36,6 +38,7 @@ class ThemeColors {
     required this.textQuaternary,
     required this.textInverse,
     required this.textInactive,
+    this.textOnCta = const Color(0xFF010101),
     required this.surfacePrimary,
     required this.surfaceSecondary,
     required this.surfaceTertiary,
@@ -144,14 +147,14 @@ class ThemeColors {
     brandSecondary:    Color(0xFFE5D5C5),
     brandTertiary:     Color(0xFF70695F),
     textPrimary:       Color(0xFFF5F3F1),
-    textSecondary:     Color(0xFFD4C4A8),
+    textSecondary:     Color(0xFFE5D5C5), // = moonboon_app origin/dev dark
     textTertiary:      Color(0xFFA09688),
     textQuaternary:    Color(0xFF9C8878),
     textInverse:       Color(0xFF1A1008),
     textInactive:      Color(0xFF707070),
     surfacePrimary:    Color(0xFF0F0D0B),
     surfaceSecondary:  Color(0xFF1E1A16),
-    surfaceTertiary:   Color(0xFF8C7865), // near-sand — CTAs unmistakeable
+    surfaceTertiary:   Color(0xFFE5D5C5), // = moonboon_app origin/dev dark
     surfaceQuaternary: Color(0xFF3D352C), // base Dark value — track ring subtle but visible
     surfaceSubdued:    Color(0xFF070503),
     borderSubdued:     Color(0xFF3D352C),
