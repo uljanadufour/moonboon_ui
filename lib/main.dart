@@ -23,6 +23,10 @@ import 'variants/home_devices/v2_window_display_page.dart';
 import 'variants/home_devices/v3_lead_follow_page.dart';
 import 'variants/home_devices/v4_deck_page.dart';
 import 'variants/home_devices/v5_nursery_shelf_page.dart';
+import 'variants/predicted_naps/day_pages.dart';
+import 'variants/predicted_naps/list_pages.dart';
+import 'variants/predicted_naps/plan.dart';
+import 'variants/predicted_naps/shared.dart' show appDark, NapsPlayground;
 import 'variants/settings/v1_stacked_list_page.dart';
 import 'variants/settings/v2_hero_actions_page.dart';
 import 'variants/settings/v3_tile_dashboard_page.dart';
@@ -63,6 +67,38 @@ class MoonboonUIApp extends StatefulWidget {
 const String _shot = String.fromEnvironment('SHOT');
 const bool _shotDark = bool.fromEnvironment('SHOT_DARK');
 
+/// Predicted naps versions by id, for the launcher and the screenshot remote.
+Widget predictedNapsVersion(String id, [NapPlan? plan]) => switch (id) {
+  'e1' => E1NextNapPage(key: UniqueKey(), plan: plan),
+  'e2' => E2ListPage(key: UniqueKey(), plan: plan),
+  'e3' => DayViewPage(key: UniqueKey(), arc: false, plan: plan),
+  _ => DayViewPage(key: UniqueKey(), arc: true, plan: plan),
+};
+
+/// Builds a plan at [hhmm] after replaying [actions] on the focus nap
+/// (start, notyet, skip, confirm, woke, monitor). Each action is "verb@time".
+NapPlan scriptedPlan(List<String> actions) {
+  final plan = NapPlan();
+  for (final a in actions) {
+    final parts = a.split('@');
+    if (parts.length == 2) {
+      final t = int.parse(parts[1]);
+      plan.setNow((t ~/ 100) * 60 + t % 100);
+    }
+    final s = plan.focus;
+    switch (parts[0]) {
+      case 'start' when s != null: plan.startNap(s);
+      case 'notyet' when s != null: plan.notYet(s);
+      case 'skip' when s != null: plan.skip(s);
+      case 'confirm' when s != null: plan.confirm(s);
+      case 'woke' when s != null: plan.wokeUpNow(s);
+      case 'monitor': plan.monitorDetects();
+      default: break;
+    }
+  }
+  return plan;
+}
+
 /// Home devices variants by id, for the launcher and the screenshot remote.
 Widget homeDevicesVariant(String id, Ownership initial) => switch (id) {
   'v1' => V1FrostedPairPage(key: UniqueKey(), initial: initial),
@@ -73,7 +109,6 @@ Widget homeDevicesVariant(String id, Ownership initial) => switch (id) {
 };
 
 class _MoonboonUIAppState extends State<MoonboonUIApp> {
-  bool _isDark = _shotDark;
   final _navigatorKey = GlobalKey<NavigatorState>();
   Timer? _remote;
   String? _lastCommand;
@@ -83,6 +118,7 @@ class _MoonboonUIAppState extends State<MoonboonUIApp> {
   @override
   void initState() {
     super.initState();
+    appDark.value = _shotDark;
     assert(() {
       _remote = Timer.periodic(const Duration(milliseconds: 400), (_) => _poll());
       return true;
@@ -96,8 +132,18 @@ class _MoonboonUIAppState extends State<MoonboonUIApp> {
     if (command == _lastCommand) return;
     _lastCommand = command;
     final parts = command.split(' ');
+    if (parts.length >= 3 && parts[0] == 'pn') {
+      appDark.value = parts[2] == 'dark';
+      NapsPlayground.initialScroll = parts.contains('scroll') ? 330 : 0;
+      final plan = scriptedPlan(parts.sublist(3));
+      _navigatorKey.currentState?.pushAndRemoveUntil(
+        PageRouteBuilder(pageBuilder: (_, _, _) => predictedNapsVersion(parts[1], plan)),
+        (_) => false,
+      );
+      return;
+    }
     if (parts.length < 4 || parts[0] != 'hd') return;
-    setState(() => _isDark = parts[3] == 'dark');
+    appDark.value = parts[3] == 'dark';
     final ownership = Ownership.values.byName(parts[2]);
     _navigatorKey.currentState?.pushAndRemoveUntil(
       PageRouteBuilder(
@@ -114,13 +160,18 @@ class _MoonboonUIAppState extends State<MoonboonUIApp> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final colors = _isDark ? ThemeColors.darkVariantC : ThemeColors.light;
+  Widget build(BuildContext context) => ValueListenableBuilder(
+    valueListenable: appDark,
+    builder: (context, dark, _) => _build(context, dark),
+  );
+
+  Widget _build(BuildContext context, bool isDark) {
+    final colors = isDark ? ThemeColors.darkVariantC : ThemeColors.light;
     return MaterialApp(
       navigatorKey: _navigatorKey,
       title: 'Moonboon Monitor Setup',
       debugShowCheckedModeBanner: false,
-      theme: buildThemeWithColors(colors, _isDark ? Brightness.dark : Brightness.light),
+      theme: buildThemeWithColors(colors, isDark ? Brightness.dark : Brightness.light),
       themeMode: ThemeMode.light,
       home: switch (_shot) {
         'v1' => const V1StackedListPage(),
@@ -149,8 +200,8 @@ class _MoonboonUIAppState extends State<MoonboonUIApp> {
         'ref-baby' => const RefBabyPage(),
         'ref-feedback' => const _RefFeedbackShot(),
         _ => _LauncherPage(
-            isDark: _isDark,
-            onToggleDark: () => setState(() => _isDark = !_isDark),
+            isDark: isDark,
+            onToggleDark: () => appDark.value = !appDark.value,
           ),
       },
     );
@@ -237,6 +288,35 @@ class _LauncherPage extends StatelessWidget {
               ),
 
               const SizedBox(height: 40),
+
+              // ══════════════════════════════════════════════════════════════
+              // PROTOTYPE — Predicted naps on Home
+              // ══════════════════════════════════════════════════════════════
+              _SectionLabel(label: 'Prototype · Predicted naps', accent: true),
+              const SizedBox(height: 4),
+              Text(
+                'Ella, 8 months. Jump the clock and try Start nap, Not yet, ×, Confirm and Adjust at the top of each version.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: context.color.textTertiary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              for (final (id, label, subtitle) in const [
+                ('e1', 'E1 · Next nap card', 'Existing components: the suggestion card on top of today'),
+                ('e2', 'E2 · Coming up list', 'Predicted naps and bedtime join the list, dashed'),
+                ('e3', 'E3 · Timeline ribbon', "Ella's day as a 06–20 ribbon, tap blocks and chips"),
+                ('e4', 'E4 · Day arc', 'Napper-style arc from wake-up to bedtime, countdown inside'),
+              ]) ...[
+                _FlowTile(
+                  label: label,
+                  subtitle: subtitle,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => predictedNapsVersion(id)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              const SizedBox(height: 36),
 
               // ══════════════════════════════════════════════════════════════
               // PROTOTYPE — New home: always both device cards
