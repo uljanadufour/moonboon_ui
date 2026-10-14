@@ -151,6 +151,7 @@ class _ProtoBar extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
+              const SizedBox(width: 8),
               Text(
                 'Now ${hhmm(plan.now)}',
                 style: t.labelMedium?.copyWith(color: c.textPrimary),
@@ -644,7 +645,7 @@ Widget? lifecycleCard(BuildContext context, NapPlan plan, {bool showUpcoming = f
           asset: kPillow,
           title: 'Nap',
           detail: '(${hhmm(s.predStart)} · ${dur(s.predLength)})',
-          trailing: 'In ${short(s.windowStart - n > 0 ? s.predStart - n : 0)}',
+          trailing: 'in ${short(s.windowStart - n > 0 ? s.predStart - n : 0)}',
         ),
       );
     case Phase.window:

@@ -14,7 +14,7 @@ class E1NextNapPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return NapsPlayground(
       plan: plan,
-      title: 'E1 · Next nap card',
+      title: 'E1 · Next nap',
       builder: (context, plan) {
         final card = lifecycleCard(context, plan, showUpcoming: true);
         return Column(
@@ -39,7 +39,7 @@ class E2ListPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return NapsPlayground(
       plan: plan,
-      title: 'E2 · Coming up list',
+      title: 'E2 · List',
       builder: (context, plan) {
         final focus = plan.focus;
         final card = lifecycleCard(context, plan);

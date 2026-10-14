@@ -75,7 +75,7 @@ class _DayViewPageState extends State<DayViewPage> {
   Widget build(BuildContext context) {
     return NapsPlayground(
       plan: widget.plan,
-      title: widget.arc ? 'E4 · Day arc (Napper-style)' : 'E3 · Timeline ribbon',
+      title: widget.arc ? 'E4 · Day arc' : 'E3 · Ribbon',
       sectionTitle: "${NapPlan.baby}'s day",
       builder: (context, plan) {
         final c = context.color;
