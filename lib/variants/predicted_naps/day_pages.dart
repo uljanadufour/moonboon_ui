@@ -70,6 +70,7 @@ class DayViewPage extends StatefulWidget {
 class _DayViewPageState extends State<DayViewPage> {
   String? _selected;
   Filter _filter = Filter.none;
+  bool _detailClosed = false;
 
   @override
   Widget build(BuildContext context) {
@@ -124,7 +125,7 @@ class _DayViewPageState extends State<DayViewPage> {
                 ],
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: AppSpacing.sm),
             ..._below(context, plan, blocks),
           ],
         );
@@ -134,34 +135,31 @@ class _DayViewPageState extends State<DayViewPage> {
 
   List<Widget> _below(BuildContext context, NapPlan plan, List<DayBlock> blocks) {
     final n = plan.now;
-    Widget gap(Widget w) => Padding(padding: const EdgeInsets.only(bottom: 8), child: w);
+    Widget gap(Widget w) => Padding(padding: const EdgeInsets.only(bottom: AppSpacing.xs), child: w);
 
-    if (_filter == Filter.slept) return sleptRows(plan);
+    if (_filter == Filter.slept) return sleptRows(plan, withTimes: true);
     if (_filter == Filter.predicted) return _predictedRows(plan, gap);
 
     if (_selected != null) {
       final b = blocks.firstWhere((b) => b.id == _selected);
       if (b.bedtime) {
-        return [
-          gap(EventRow(asset: kMoon, title: 'Bedtime', detail: 'around ${hhmm(b.start)}', trailing: 'in ${short(b.start - n)}', style: RowStyle.focus)),
-        ];
+        return [gap(predictedRow(plan, icon: kMoon, label: 'Bedtime', detail: 'around ${hhmm(b.start)}', at: b.start))];
       }
       if (b.slot != null && plan.phaseOf(b.slot!) == Phase.upcoming) {
         return [gap(_PredictedDetail(plan: plan, slot: b.slot!, onClose: () => setState(() => _selected = null)))];
       }
-      if (b.slot != null) {
-        final card = lifecycleCard(context, plan);
-        if (card != null && plan.focus == b.slot) return [gap(card)];
+      if (b.slot != null && plan.focus == b.slot) {
+        final top = _focusCard(context, plan);
+        if (top != null) return [gap(top)];
       }
       if (b.slept != null) {
         final s = b.slept!;
         return [
-          gap(EventRow(
-            asset: s.kind == 'Nap' ? kPillow : kMoon,
-            title: s.kind,
-            detail: s.kind == 'Nap' ? '${hhmm(s.start)} – ${hhmm(s.end)} · ${dur(s.length)}' : '${hhmm(s.start)} – ${hhmm(s.end)} · ${dur(s.length)}',
-            trailing: '${short(n - s.end)} ago',
-            style: RowStyle.live,
+          gap(MyDayRowShell(
+            icon: s.kind == 'Nap' ? kPillow : kMoon,
+            label: s.kind,
+            detail: dur(s.length),
+            trailing: MyDayPill.elapsed(n - s.end),
           )),
         ];
       }
@@ -169,41 +167,107 @@ class _DayViewPageState extends State<DayViewPage> {
 
     // Default: what needs you now (or the next nap), then today so far.
     final focus = plan.focus;
-    final card = lifecycleCard(context, plan);
-    final top = card ??
-        (focus != null
-            ? EventRow(
-                asset: kPillow,
-                title: 'Next nap',
-                detail: '${focus.snoozes > 0 ? 'moved to' : 'around'} ${hhmm(focus.predStart)} · ${dur(focus.predLength)}',
-                trailing: 'in ${short(focus.predStart - n)}',
-                style: RowStyle.focus,
-                onTap: () => setState(() => _selected = 'slot-${focus.index}'),
-              )
-            : plan.bedtime > n
-                ? EventRow(asset: kMoon, title: 'Bedtime', detail: 'around ${hhmm(plan.bedtime)}', trailing: 'in ${short(plan.bedtime - n)}', style: RowStyle.focus)
-                : null);
+    if (focus != null && plan.phaseOf(focus) == Phase.upcoming && focus.snoozes == 0 && !_detailClosed) {
+      return [gap(_PredictedDetail(plan: plan, slot: focus, onClose: () => setState(() => _detailClosed = true)))];
+    }
+    final top = _focusCard(context, plan);
     return [if (top != null) gap(top), ...sleptRows(plan, limit: 2)];
   }
 
-  List<Widget> _predictedRows(NapPlan plan, Widget Function(Widget) gap) {
+  /// Figma's "Next nap highlight": the suggestion card while there's
+  /// something to answer, a two-line highlight while a nap is coming or
+  /// running.
+  Widget? _focusCard(BuildContext context, NapPlan plan) {
     final n = plan.now;
+    final s = plan.focus;
+    if (s == null) {
+      return plan.bedtime > n ? predictedRow(plan, icon: kMoon, label: 'Bedtime', detail: 'around ${hhmm(plan.bedtime)}', at: plan.bedtime) : null;
+    }
+    switch (plan.phaseOf(s)) {
+      case Phase.upcoming:
+        return _Highlight(
+          title: s.snoozes > 0 ? 'Next nap · moved later' : 'Next nap',
+          detail: 'around ${hhmm(s.predStart)} · ${dur(s.predLength)}',
+          pill: 'in ${short(s.predStart - n)}',
+          predicted: true,
+          onTap: () => setState(() => _selected = 'slot-${s.index}'),
+        );
+      case Phase.running:
+        return _Highlight(
+          title: 'Napping now',
+          detail: 'since ${hhmm(s.start!)} · likely until ${hhmm(r5(s.start! + s.predLength))}',
+          pill: 'Now',
+          onTap: () => showRunningNapSheet(context, plan, s),
+        );
+      default:
+        return lifecycleCard(context, plan);
+    }
+  }
+
+  List<Widget> _predictedRows(NapPlan plan, Widget Function(Widget) gap) {
     return [
       for (final s in plan.ahead)
-        gap(EventRow(
-          asset: kPillow,
-          title: 'Nap',
+        gap(predictedRow(
+          plan,
+          icon: kPillow,
+          label: 'Nap',
           detail: 'around ${hhmm(s.predStart)} · ${dur(s.predLength)}',
-          trailing: s.predStart > n ? 'in ${short(s.predStart - n)}' : 'Now',
-          style: s == plan.focus ? RowStyle.focus : RowStyle.predicted,
+          at: s.predStart,
           onTap: () => setState(() {
             _filter = Filter.none;
             _selected = 'slot-${s.index}';
           }),
         )),
-      if (plan.bedtime > n)
-        gap(EventRow(asset: kMoon, title: 'Bedtime', detail: 'around ${hhmm(plan.bedtime)}', trailing: 'in ${short(plan.bedtime - n)}', style: RowStyle.predicted)),
+      if (plan.bedtime > plan.now)
+        gap(predictedRow(plan, icon: kMoon, label: 'Bedtime', detail: 'around ${hhmm(plan.bedtime)}', at: plan.bedtime)),
     ];
+  }
+}
+
+/// The two-line next-nap highlight from Figma: white card, dashed while it's
+/// a prediction, solid once it's real.
+class _Highlight extends StatelessWidget {
+  final String title;
+  final String detail;
+  final String pill;
+  final bool predicted;
+  final VoidCallback? onTap;
+  const _Highlight({required this.title, required this.detail, required this.pill, this.predicted = false, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.color;
+    final row = Padding(
+      padding: AppSpacing.cardPadding,
+      child: Row(
+        spacing: AppSpacing.sm,
+        children: [
+          SizedBox.square(dimension: 32, child: Image.asset(kPillow, fit: BoxFit.contain)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: AppText.labelSmall.copyWith(color: c.textTertiary)),
+                Text(detail, style: AppText.labelMedium.copyWith(color: c.textPrimary)),
+              ],
+            ),
+          ),
+          MyDayPill(pill),
+        ],
+      ),
+    );
+    return Material(
+      color: c.surfacePrimary,
+      shape: RoundedRectangleBorder(
+        borderRadius: AppRadius.xlAll,
+        side: predicted ? BorderSide.none : BorderSide(color: c.borderNormal),
+      ),
+      child: InkWell(
+        borderRadius: AppRadius.xlAll,
+        onTap: onTap,
+        child: predicted ? DashedRoundedBorder(color: c.borderNormal, child: row) : row,
+      ),
+    );
   }
 }
 
@@ -217,31 +281,28 @@ class _LegendChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.color;
-    final t = Theme.of(context).textTheme;
     final swatch = Container(
       width: 12,
       height: 8,
-      decoration: BoxDecoration(
-        color: dashed ? c.overlayBrand : c.brandPrimary,
-        borderRadius: BorderRadius.circular(2),
-      ),
+      decoration: BoxDecoration(color: dashed ? c.overlayBrand : c.brandPrimary, borderRadius: BorderRadius.circular(2)),
     );
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        height: 26,
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
         decoration: BoxDecoration(
-          color: on ? c.surfaceTertiary : Colors.transparent,
-          borderRadius: BorderRadius.circular(100),
-          border: Border.all(color: on ? c.surfaceTertiary : c.borderNormal),
+          color: on ? c.surfaceTertiary : c.surfacePrimary,
+          borderRadius: AppRadius.pillAll,
+          boxShadow: on ? null : AppShadow.sm,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           spacing: 6,
           children: [
-            dashed ? DashedBorder(radius: 2, color: c.brandPrimary, child: swatch) : swatch,
-            Text(label, style: t.labelSmall?.copyWith(color: on ? c.textOnCta : c.textTertiary)),
+            dashed ? DashedRoundedBorder(radius: 2, color: c.brandPrimary, child: swatch) : swatch,
+            Text(label, style: AppText.labelSmall.copyWith(color: on ? c.textOnCta : c.brandSecondary)),
           ],
         ),
       ),
@@ -249,7 +310,8 @@ class _LegendChip extends StatelessWidget {
   }
 }
 
-/// Tapped predicted nap: when, how sure, and a wind-down reminder.
+/// Tapped predicted nap (Figma "predicted nap selected"): when, the likely
+/// window, and a wind-down reminder.
 class _PredictedDetail extends StatelessWidget {
   final NapPlan plan;
   final NapSlot slot;
@@ -259,65 +321,71 @@ class _PredictedDetail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.color;
-    final t = Theme.of(context).textTheme;
     final windDown = slot.windowStart - 10;
     Widget line(String a, String b) => Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
       child: Row(
         children: [
-          Expanded(child: Text(a, style: t.bodySmall?.copyWith(color: c.textTertiary))),
-          Text(b, style: t.labelMedium?.copyWith(color: c.textSecondary)),
+          Expanded(child: Text(a, style: AppText.bodySmall.copyWith(color: c.textTertiary))),
+          Text(b, style: AppText.labelMedium.copyWith(color: c.textPrimary)),
         ],
       ),
     );
-    return DashedBorder(
-      radius: 22,
-      color: c.brandPrimary,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 6, 6, 14),
-        decoration: BoxDecoration(color: c.surfacePrimary, borderRadius: BorderRadius.circular(22)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Image.asset(kPillow, width: 22),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text('Predicted nap · ${dur(slot.predLength)}', style: t.labelMedium?.copyWith(color: c.textSecondary)),
-                ),
-                Text('in ${short(slot.predStart - plan.now)}', style: t.labelSmall?.copyWith(color: c.textTertiary)),
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  icon: Icon(Icons.close_rounded, size: 18, color: c.textTertiary),
-                  onPressed: onClose,
-                ),
-              ],
-            ),
-            Padding(
-              padding: const EdgeInsets.only(right: 10),
-              child: Column(
+    return DecoratedBox(
+      decoration: BoxDecoration(color: c.surfacePrimary, borderRadius: AppRadius.xlAll),
+      child: DashedRoundedBorder(
+        color: c.borderNormal,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, 0, AppSpacing.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                spacing: AppSpacing.sm,
                 children: [
-                  line('Likely window', '${hhmm(slot.windowStart)} – ${hhmm(slot.windowEnd)}'),
-                  if (windDown > plan.now) line('Start winding down', hhmm(windDown)),
-                  const SizedBox(height: 10),
-                  if (windDown > plan.now)
-                    PillButton(
-                      label: 'Remind me at ${hhmm(windDown)}',
-                      onTap: () => ScaffoldMessenger.of(context)
-                        ..hideCurrentSnackBar()
-                        ..showSnackBar(SnackBar(content: Text("We'll remind you at ${hhmm(windDown)}"))),
+                  SizedBox.square(dimension: 32, child: Image.asset(kPillow, fit: BoxFit.contain)),
+                  Expanded(
+                    child: Text('Predicted nap · ${dur(slot.predLength)}', style: AppText.bodySmall.copyWith(color: c.textTertiary)),
+                  ),
+                  MyDayPill('in ${short(slot.predStart - plan.now)}'),
+                  SizedBox.square(
+                    dimension: 44,
+                    child: InkWell(
+                      borderRadius: AppRadius.pillAll,
+                      onTap: onClose,
+                      child: Icon(Icons.close_rounded, size: 16, color: c.textTertiary),
                     ),
-                  const SizedBox(height: 10),
-                  Text(
-                    "Based on ${NapPlan.baby}'s last 7 days. Times shift as you track.",
-                    textAlign: TextAlign.center,
-                    style: t.labelSmall?.copyWith(fontSize: 11, color: c.textQuaternary),
                   ),
                 ],
               ),
-            ),
-          ],
+              Padding(
+                padding: const EdgeInsets.only(right: AppSpacing.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    line('Likely window', '${hhmm(slot.windowStart)} – ${hhmm(slot.windowEnd)}'),
+                    if (windDown > plan.now) ...[
+                      line('Start winding down', hhmm(windDown)),
+                      const SizedBox(height: AppSpacing.sm),
+                      SmallButton(
+                        label: 'Remind me at ${hhmm(windDown)}',
+                        height: 36,
+                        onTap: () => ScaffoldMessenger.of(context)
+                          ..hideCurrentSnackBar()
+                          ..showSnackBar(SnackBar(content: Text("We'll remind you at ${hhmm(windDown)}"))),
+                      ),
+                    ],
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      "Based on ${NapPlan.baby}'s last 7 days. Times shift as you track.",
+                      textAlign: TextAlign.center,
+                      style: AppText.labelSmall.copyWith(color: c.textTertiary),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

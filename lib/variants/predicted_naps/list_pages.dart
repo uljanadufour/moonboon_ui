@@ -4,8 +4,9 @@ import '../../theme/theme_colors.dart';
 import 'plan.dart';
 import 'shared.dart';
 
-/// E1 · Next nap — existing components only. The "Smart nap suggestion" card
-/// sits on top of today's list and walks through the nap's life in place.
+/// E1 · Next nap (Figma Exploration 1, "Using existing components"): the
+/// "Smart nap suggestion" card on top of today's rows, changing in place. If
+/// the monitor tracks the nap, its auto-track card replaces it — never both.
 class E1NextNapPage extends StatelessWidget {
   final NapPlan? plan;
   const E1NextNapPage({super.key, this.plan});
@@ -16,11 +17,11 @@ class E1NextNapPage extends StatelessWidget {
       plan: plan,
       title: 'E1 · Next nap',
       builder: (context, plan) {
-        final card = lifecycleCard(context, plan, showUpcoming: true);
+        final card = lifecycleCard(context, plan, e1: true);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (card != null) ...[card, const SizedBox(height: 12)],
+            if (card != null) ...[card, const SizedBox(height: AppSpacing.xs)],
             ...sleptRows(plan),
           ],
         );
@@ -29,8 +30,9 @@ class E1NextNapPage extends StatelessWidget {
   }
 }
 
-/// E2 · List — the rest of the day joins the list as "Coming up": dashed
-/// predicted rows, the nap in focus turns into the lifecycle card in place.
+/// E2 · List (Figma Exploration 2, "A · List overview"): "Coming up" above
+/// "Earlier". Predicted naps and bedtime are dashed My day rows (as in
+/// moonboon_app PR #876); the nap in its moment becomes the suggestion card.
 class E2ListPage extends StatelessWidget {
   final NapPlan? plan;
   const E2ListPage({super.key, this.plan});
@@ -49,38 +51,28 @@ class E2ListPage extends StatelessWidget {
           if (s == focus && card != null) {
             rows.add(card);
           } else if (p == Phase.upcoming || p == Phase.window) {
-            rows.add(
-              EventRow(
-                asset: kPillow,
-                title: 'Nap',
-                detail: 'around ${hhmm(s.predStart)} · ${dur(s.predLength)}',
-                trailing: 'in ${short(s.predStart - plan.now)}',
-                style: s == focus ? RowStyle.focus : RowStyle.predicted,
-              ),
-            );
+            rows.add(predictedRow(
+              plan,
+              icon: kPillow,
+              label: 'Nap',
+              detail: 'around ${hhmm(s.predStart)} · ${dur(s.predLength)}',
+              at: s.predStart,
+            ));
           } else {
             continue;
           }
-          rows.add(const SizedBox(height: 8));
+          rows.add(const SizedBox(height: AppSpacing.xs));
         }
         final bed = plan.bedtime;
         if (bed > plan.now) {
-          rows.add(
-            EventRow(
-              asset: kMoon,
-              title: 'Bedtime',
-              detail: 'around ${hhmm(bed)}',
-              trailing: 'in ${short(bed - plan.now)}',
-              style: focus == null ? RowStyle.focus : RowStyle.predicted,
-            ),
-          );
+          rows.add(predictedRow(plan, icon: kMoon, label: 'Bedtime', detail: 'around ${hhmm(bed)}', at: bed));
         }
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const _Label('Coming up'),
             ...rows,
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.lg),
             const _Label('Earlier'),
             ...sleptRows(plan),
           ],
@@ -96,10 +88,7 @@ class _Label extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-    child: Text(
-      text,
-      style: Theme.of(context).textTheme.labelSmall?.copyWith(color: context.color.textQuaternary),
-    ),
+    padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.sm),
+    child: Text(text, style: AppText.labelSmall.copyWith(color: context.color.textTertiary)),
   );
 }

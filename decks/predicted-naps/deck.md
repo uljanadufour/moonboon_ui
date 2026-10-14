@@ -10,6 +10,7 @@ Home shows only what already happened. Parents want to prepare for what's next: 
 **Success:** at a glance a parent knows the next nap. When the moment comes, one tap records what happened. Nothing nags, and auto-tracking never doubles up.
 
 **Assumptions in the prototype:**
+- **E1:** follows Exploration 1. The in-window card answers with Confirm / Adjust (Confirm starts the nap).
 - **Window:** opens 10 minutes before the predicted start and stays open until the predicted end.
 - **"Not yet":** moves the nap about 30 minutes later and makes it a little shorter.
 - **"Did Ella nap?":** asked only after the predicted end, when nothing was tracked.
@@ -17,6 +18,25 @@ Home shows only what already happened. Parents want to prepare for what's next: 
 - **Monitor:** when it detects the nap, its auto-track card takes over, so there's never a second card.
 - **Replanning:** every later nap and bedtime is re-predicted from what actually happened, using a 1h 55m wake window and 2h 10m before bed.
 - **Shared model:** all four versions run on the same plan (`plan.dart`), so the same taps give the same day in every version.
+
+## Built from the app's own parts
+Rows, pills, the suggestion card, the small buttons and the overview cards are ports of `moonboon_app` `origin/dev` widgets, with the app's tokens and text styles (`lib/variants/predicted_naps/app_widgets.dart`):
+- **Rows:** `MyDayRowShell` (and `isPlaceholder` dashing for predictions, as in PR #876).
+- **Pills:** `MyDayTimestampPill`.
+- **Card and buttons:** `NapSuggestionCard`, with `Button` at its custom 28pt height.
+- **Stats:** the overview cards.
+- **Outline:** `DashedRoundedBorder`.
+
+The copy follows the current Figma, so "Did Ella nap?" has no hint line.
+
+## Compared with moonboon_app PR #876 (Nap prediction v0)
+- **Same:** dashed `MyDayRowShell` rows for naps still to come, with an "in 1h 30m" pill.
+- **Row copy:** PR #876 labels the first nap "Next nap" with its window ("13:00 – 13:20"). Figma uses "Nap · around 13:10 · 1h 15min".
+- **When the window opens:** the PR's pill turns into "Open now", or "Rock Ella" when the parent owns a cradle (tapping it starts rocking). Here it becomes the suggestion card with Start nap / Not yet.
+- **Closed windows:** in the PR they simply disappear, with no "Did Ella nap?", no Confirm/Adjust and no replan.
+- **Running sleep:** the PR hides Coming up. Here it shows "Napping now".
+- **Bedtime:** the PR has a fixed 19:00 cutoff and no bedtime row. Here bedtime is a row (E2) or the moon (E3/E4) and moves with the replan.
+- **Forecast:** the PR uses age-based wake windows, then the baby's own average ±15 min after five measured windows. Here it's a scripted scenario.
 
 ## How to test
 Open the launcher, then **Prototype · Predicted naps**. The bar at the top of each version has:
@@ -79,6 +99,7 @@ Each sheet shows eight states, left to right: before, in window, after "Not yet"
 Build **E4's arc with E1's card underneath**. That's what E4 already does: the arc answers "when is the next nap?" better than anything else and feels like Moonboon, and the action card is the same auto-track pattern parents already know. Keep E3's tap-a-block detail (likely window and the "Remind me at 12:50" wind-down) on the arc. Drop E2's long list. Its bedtime row is covered by the moon at the end of the arc.
 
 ## Open questions for the PM
+- Should the in-window primary be PR #876's "Rock Ella" for cradle owners, and Start nap for everyone else?
 - Should "Not yet" ask "how much later?" or keep moving the nap 30 minutes?
 - After 1 hour, does an unanswered "Did Ella nap?" become a quiet row in Earlier, or disappear at bedtime?
 - Confidence: show "Based on 7 days" everywhere, or only in the tap detail?
